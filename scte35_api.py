@@ -78,4 +78,4 @@ async def monitor_service_status():
     while True:
         try:
             response = requests.get(url)
-            if response.status_code == 200;
+            if response.status_code == 200:
