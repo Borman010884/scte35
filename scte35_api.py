@@ -2,10 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import threefive
 import base64
-import requests
-import asyncio
 import logging
-import json
 
 # 🔧 Настройка логирования
 logging.basicConfig(
@@ -70,13 +67,3 @@ async def encode_scte35(request: SCTE35EncodeRequest):
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
-
-# 🔁 Фоновая задача мониторинга
-async def monitor_service_status():
-    await asyncio.sleep(5)
-    url = "http://localhost:8000/health"
-    while True:
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                pass
