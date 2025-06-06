@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import threefive
@@ -6,6 +5,7 @@ import base64
 import requests
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 # 🔧 Настройка логирования
 logging.basicConfig(
@@ -17,7 +17,29 @@ logging.basicConfig(
     ]
 )
 
-app = FastAPI()
+# 🔁 Фоновая задача мониторинга
+async def monitor_service_status():
+    await asyncio.sleep(5)  # ⏳ Подождать немного после старта
+    url = "http://localhost:8000/health"
+    while True:
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                logging.info("✅ Service is UP")
+            else:
+                logging.warning(f"⚠️ Service returned status: {response.status_code}")
+        except Exception as e:
+            logging.error(f"❌ Error checking service: {e}")
+        await asyncio.sleep(600)
+
+# 🔄 Контекст жизненного цикла
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(monitor_service_status())
+    yield
+    task.cancel()
+
+app = FastAPI(lifespan=lifespan)
 
 # 📦 Модель запроса
 class SCTE35Request(BaseModel):
@@ -47,27 +69,7 @@ async def parse_scte35(request: SCTE35Request):
 async def health_check():
     return {"status": "ok"}
 
-# 🔁 Фоновая задача мониторинга
-async def monitor_service_status():
-    await asyncio.sleep(30)  # ⏳ Подождать 5 секунд перед первым запросом
-    url = "http://localhost:8000/health"
-    while True:
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                logging.info("✅ Service is UP")
-            else:
-                logging.warning(f"⚠️ Service returned status: {response.status_code}")
-        except Exception as e:
-            logging.error(f"❌ Error checking service: {e}")
-        await asyncio.sleep(600)  # интервал в секундах
-
-# 🚀 Запуск фоновой задачи при старте
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(monitor_service_status())
-
 # 🔌 Запуск приложения
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
