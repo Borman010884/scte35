@@ -1,11 +1,11 @@
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+import threefive
 import base64
 import requests
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+import json
 
 # 🔧 Настройка логирования
 logging.basicConfig(
@@ -17,43 +17,18 @@ logging.basicConfig(
     ]
 )
 
-# 🔁 Фоновая задача мониторинга
-async def monitor_service_status():
-    await asyncio.sleep(5)  # ⏳ Подождать немного после старта
-    url = "http://localhost:8000/health"
-    while True:
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                logging.info("✅ Service is UP")
-            else:
-                logging.warning(f"⚠️ Service returned status: {response.status_code}")
-        except Exception as e:
-            logging.error(f"❌ Error checking service: {e}")
-        await asyncio.sleep(600)
+app = FastAPI()
 
-# 🔄 Контекст жизненного цикла
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    task = asyncio.create_task(monitor_service_status())
-    yield
-    task.cancel()
-
-app = FastAPI(lifespan=lifespan)
-
-# 📦 Модель запроса
+# 📦 Модели запросов
 class SCTE35Request(BaseModel):
     scte35_string: str
     format: str  # "base64" or "hex"
 
-# 📦 Модель запроса для энкодинга
 class SCTE35EncodeRequest(BaseModel):
-    event_id: int
-    duration: float
-    pts_time: int
-    format: str  # "base64" или "hex"
+    scte35_json: dict
+    format: str  # "base64" or "hex"
 
-# 🔍 Основной эндпоинт для парсинга
+# 🔍 Декодирование SCTE-35
 @app.post("/parse_scte35/")
 async def parse_scte35(request: SCTE35Request):
     try:
@@ -64,27 +39,29 @@ async def parse_scte35(request: SCTE35Request):
         else:
             raise HTTPException(status_code=400, detail="Invalid format. Use 'base64' or 'hex'.")
         
-        # Заглушка вместо threefive
-        cue = {"decoded_data": "example_decoded_data"}
-        return cue
+        cue = threefive.Cue(scte35_data)
+        cue.decode()
+        return cue.get()
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 🔍 Основной эндпоинт для энкодинга
+# 🧬 Кодирование SCTE-35
 @app.post("/encode_scte35/")
 async def encode_scte35(request: SCTE35EncodeRequest):
     try:
-        # Заглушка вместо threefive
-        scte35_data = f"event_id={request.event_id}, duration={request.duration}, pts_time={request.pts_time}"
+        cue = threefive.Cue()
+        cue.set(request.scte35_json)
+        cue.encode()
+        binary_data = cue.packet
         if request.format == "base64":
-            scte35_string = base64.b64encode(scte35_data.encode()).decode()
+            encoded = base64.b64encode(binary_data).decode()
         elif request.format == "hex":
-            scte35_string = scte35_data.encode().hex()
+            encoded = binary_data.hex()
         else:
             raise HTTPException(status_code=400, detail="Invalid format. Use 'base64' or 'hex'.")
-        
-        return {"scte35_string": scte35_string, "format": request.format}
+
+        return {"encoded": encoded}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -94,7 +71,11 @@ async def encode_scte35(request: SCTE35EncodeRequest):
 async def health_check():
     return {"status": "ok"}
 
-# 🔌 Запуск приложения
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+# 🔁 Фоновая задача мониторинга
+async def monitor_service_status():
+    await asyncio.sleep(5)
+    url = "http://localhost:8000/health"
+    while True:
+        try:
+            response = requests.get(url)
+            if response.status_code == 200
