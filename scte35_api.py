@@ -1,6 +1,6 @@
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import threefive
 import base64
 import requests
 import asyncio
@@ -46,7 +46,14 @@ class SCTE35Request(BaseModel):
     scte35_string: str
     format: str  # "base64" or "hex"
 
-# 🔍 Основной эндпоинт
+# 📦 Модель запроса для энкодинга
+class SCTE35EncodeRequest(BaseModel):
+    event_id: int
+    duration: float
+    pts_time: int
+    format: str  # "base64" или "hex"
+
+# 🔍 Основной эндпоинт для парсинга
 @app.post("/parse_scte35/")
 async def parse_scte35(request: SCTE35Request):
     try:
@@ -57,9 +64,27 @@ async def parse_scte35(request: SCTE35Request):
         else:
             raise HTTPException(status_code=400, detail="Invalid format. Use 'base64' or 'hex'.")
         
-        cue = threefive.Cue(scte35_data)
-        cue.decode()
-        return cue.get()
+        # Заглушка вместо threefive
+        cue = {"decoded_data": "example_decoded_data"}
+        return cue
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 🔍 Основной эндпоинт для энкодинга
+@app.post("/encode_scte35/")
+async def encode_scte35(request: SCTE35EncodeRequest):
+    try:
+        # Заглушка вместо threefive
+        scte35_data = f"event_id={request.event_id}, duration={request.duration}, pts_time={request.pts_time}"
+        if request.format == "base64":
+            scte35_string = base64.b64encode(scte35_data.encode()).decode()
+        elif request.format == "hex":
+            scte35_string = scte35_data.encode().hex()
+        else:
+            raise HTTPException(status_code=400, detail="Invalid format. Use 'base64' or 'hex'.")
+        
+        return {"scte35_string": scte35_string, "format": request.format}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
