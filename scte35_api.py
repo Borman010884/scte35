@@ -49,6 +49,7 @@ async def health_check():
 
 # 🔁 Фоновая задача мониторинга
 async def monitor_service_status():
+    await asyncio.sleep(5)  # ⏳ Подождать 5 секунд перед первым запросом
     url = "http://localhost:8000/health"
     while True:
         try:
